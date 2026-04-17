@@ -1,0 +1,6 @@
+[submodule "defectdojo"]
+	path = defectdojo
+	url = https://github.com/DefectDojo/django-DefectDojo
+[submodule "elk"]
+	path = elk
+	url = https://github.com/deviantony/docker-elk
