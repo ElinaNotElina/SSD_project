@@ -106,3 +106,77 @@ docker compose -f defectdojo/docker-compose.yml logs initializer
 * First startup may take several minutes (DefectDojo build)
 * `init.sh` is required only once
 * Logs from the Juice Shop application are collected via Docker logging driver and sent to ELK
+
+---
+
+## SAST Automation (Vulnerability Scanning)
+
+After the system is up and running, follow these steps to run automated SAST scans and import results into DefectDojo.
+
+### 1. Create Product and Engagement in DefectDojo
+
+1. Open DefectDojo at http://localhost:8080 and log in as `admin`
+2. Go to **Products** → **Add Product**
+   - Name: `SSD Project`
+   - Description: `Security testing project for SAST vulnerability scanning and management`
+   - Product Type: `Research and Development`
+3. Navigate to the product page → **Engagements** → **Add New Interactive Engagement**
+   - Name: `SSD Project`
+   - Description: `Automated SAST scanning engagement for vulnerability detection and tracking`
+   - **Click** `Deduplication within this engagement only` (this prevents duplicate findings on subsequent scans)
+
+> **Note:** Remember the Product ID and Engagement ID from the URL bar (e.g., `/product/5` → ID = 5, `/engagement/5` → ID = 5)
+
+### 2. Get DefectDojo API Token
+
+Navigate to Home/API Key section API v2 Key and get your Api Key.
+
+### 3. Run the SAST Automation Script
+
+```bash
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Make script executable
+chmod +x sast_automation.py
+
+# Run the script
+python3 sast_automation.py
+```
+
+The script will prompt you to enter:
+- Product ID
+- Engagement ID
+- API Token
+
+### 4. What the Script Does
+
+The script automatically:
+1. Clones three vulnerable-by-design projects (`vulpy`, `dvna`, `dvca`)
+2. Runs SAST scanners (`Bandit`, `NjsScan`, `Flawfinder`) on each project
+3. Converts scan results to SARIF format
+4. Imports findings into DefectDojo via REST API
+5. Adds the following tags to each finding:
+   - `tool:bandit` / `tool:njsscan` / `tool:flawfinder`
+   - `project:vulpy` / `project:dvna` / `project:dvca`
+   - `severity:high` / `severity:medium` / `severity:info`
+   - `priority:high` / `priority:medium` / `priority:low`
+   - `sast`, `automated`
+
+### 5. Verify Results
+
+1. Open DefectDojo in your browser
+2. Navigate to your product
+3. You can see that findings are imported with all expected tags
+
+---
+
+## Notes
+
+* Deduplication must be enabled at the Engagement level (check the box when creating the Engagement)
+
+---
