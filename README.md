@@ -39,6 +39,12 @@ git submodule update --init --recursive
 bash scripts/init.sh
 ```
 
+PowerShell (Windows):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/init.ps1
+```
+
 This script:
 
 * initializes submodules
@@ -55,10 +61,19 @@ This step is required at least once after a clean clone.
 bash scripts/up.sh
 ```
 
+PowerShell (Windows):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/up.ps1
+```
+
 This script:
 
+* ensures ELK users/roles are initialized (`setup`)
 * starts the ELK stack
+* starts observability extensions (`Filebeat`, `Metricbeat`, `APM Server`)
 * builds and starts DefectDojo from the submodule
+* enables DefectDojo metrics endpoints (`nginx_status`, `django_metrics`)
 * prints the generated admin password from the `initializer` logs
 
 ---
@@ -69,6 +84,12 @@ This script:
 bash scripts/down.sh
 ```
 
+PowerShell (Windows):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/down.ps1
+```
+
 ---
 
 ## Services
@@ -76,6 +97,7 @@ bash scripts/down.sh
 * DefectDojo: http://localhost:8080
 * Kibana: http://localhost:5601
 * Juice Shop: http://localhost:3000
+* APM OTLP endpoint: http://localhost:8200/v1/traces
 
 ---
 
@@ -105,7 +127,74 @@ docker compose -f defectdojo/docker-compose.yml logs initializer
 
 * First startup may take several minutes (DefectDojo build)
 * `init.sh` is required only once
-* Logs from the Juice Shop application are collected via Docker logging driver and sent to ELK
+* Logs are collected through `Filebeat -> Logstash -> Elasticsearch`
+* Metrics are collected through `Metricbeat`
+* Traces are collected through `OpenTelemetry -> APM Server`
+* Additional external feed integration: `CISA KEV -> Logstash -> Elasticsearch`
+
+---
+
+## Point 3: Observability (Implemented)
+
+This repository now includes a full observability pipeline:
+
+1. **Metrics collection**
+   - `Metricbeat` extension is started automatically by `scripts/up.sh`
+   - Docker/container metrics and ELK component metrics are indexed in `metricbeat-*`
+
+2. **Log collection**
+   - `Filebeat` extension is started automatically by `scripts/up.sh`
+   - Filebeat output is routed to Logstash (`logstash:5044`)
+   - Logstash writes logs to `logs-observability-*`
+   - Log collection is scoped to `DefectDojo` containers and containers labeled with `ssd.observability=true`
+   - `Juice Shop` is started with this label automatically for demo purposes
+
+3. **Trace collection**
+   - `APM Server` is started automatically by `scripts/up.sh`
+   - A trace generator script is available: `scripts/generate_traces.py`
+
+4. **Integration of 2 systems**
+   - Docker logs pipeline (`Filebeat -> Logstash -> Elasticsearch`)
+   - CISA KEV feed pipeline (`Logstash http_poller -> Elasticsearch`), indexed as `cisa-kev-*`
+
+### Generate demo traces
+
+```bash
+python3 scripts/generate_traces.py --count 60 --delay 0.2
+```
+
+PowerShell (Windows):
+
+```powershell
+python scripts/generate_traces.py --count 60 --delay 0.2
+```
+
+### Verify observability health
+
+```bash
+bash scripts/verify_observability.sh
+```
+
+PowerShell (Windows):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/verify_observability.ps1
+```
+
+For any additional demo container that should be ingested into `logs-observability-*`, start it with:
+
+```bash
+docker run --label ssd.observability=true ...
+```
+
+In Kibana (`http://localhost:5601`), create data views for:
+
+* `metricbeat-*`
+* `logs-observability-*`
+* `cisa-kev-*`
+* `traces-apm*`
+
+Then use Discover / Dashboard / APM to visualize metrics, logs, traces, and KEV entries.
 
 ---
 

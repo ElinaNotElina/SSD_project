@@ -3,4 +3,4 @@
 	url = https://github.com/DefectDojo/django-DefectDojo
 [submodule "elk"]
 	path = elk
-	url = https://github.com/deviantony/docker-elk
+	url = https://github.com/AlliumPro/docker-elk.git
