@@ -17,7 +17,10 @@ function Assert-LastCommandSuccess {
 Push-Location $repoRoot
 try {
     Write-Host "Initializing git submodules..."
-    git submodule update --init --recursive
+    # Initialize only runtime-critical top-level submodules.
+    # Nested doc submodules (for example docsy) are not required
+    # for Docker startup and often fail on unstable connections.
+    git submodule update --init defectdojo elk
     Assert-LastCommandSuccess -Context "Submodule initialization"
 
     Write-Host "Running one-time ELK setup..."

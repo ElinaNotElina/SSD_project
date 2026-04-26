@@ -269,3 +269,80 @@ The script automatically:
 * Deduplication must be enabled at the Engagement level (check the box when creating the Engagement)
 
 ---
+
+## Point 5: Pipeline "Scan -> DefectDojo -> PDF Report" (Implemented)
+
+This step automates the full flow required for part 5:
+
+1. run SAST scans (Bandit, NjsScan, Flawfinder)
+2. import SARIF into DefectDojo (with dedup metadata)
+3. apply tags to findings
+4. fetch observability counters from Elasticsearch
+5. generate an IMRaD PDF report with required diagrams
+
+### What to do first
+
+If the stack is not running yet, start it first:
+
+```bash
+bash scripts/up.sh
+```
+
+PowerShell (Windows):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/up.ps1
+```
+
+### Run the end-to-end pipeline
+
+Linux/macOS:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+python3 scripts/scan_to_report.py \
+  --product-id 5 \
+  --engagement-id 5 \
+  --dojo-token <DEFECTDOJO_API_TOKEN>
+```
+
+Windows PowerShell:
+
+```powershell
+python -m venv venv
+venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+powershell -ExecutionPolicy Bypass -File scripts/run_scan_to_report.ps1 `
+  -ProductId 5 `
+  -EngagementId 5 `
+  -DojoToken <DEFECTDOJO_API_TOKEN>
+```
+
+### Optional evidence screenshots for Results section
+
+Put screenshots (Discover, dashboard, alerts list, demo frames) into:
+
+```text
+artifacts/evidence/
+```
+
+The report generator appends `*.png`, `*.jpg`, `*.jpeg`, `*.webp` files from this folder to the `Results` section.
+
+### Output artifacts
+
+The script generates:
+
+* `artifacts/scan_to_report_summary_<timestamp>.json`
+* `artifacts/SSD_IMRaD_Report_<timestamp>.pdf`
+
+The PDF includes:
+
+* IMRaD structure (`Introduction`, `Methods`, `Results`, `Discussion`)
+* Architecture diagram
+* Data flow diagram (`SAST -> DefectDojo -> Report`)
+* Observability pipeline diagram (`Application -> Collector -> Storage -> Visualization`)
+* Findings severity chart and observability counters
