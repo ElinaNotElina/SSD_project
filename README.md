@@ -38,7 +38,7 @@ This project combines both directions in one reproducible environment:
 
 ```mermaid
 flowchart LR
-    A[Apps: vulpy / dvca] --> B[SAST Tools]
+    A[Apps: vulpy / dvna / dvca] --> B[SAST Tools]
     B --> C[DefectDojo]
     A --> D[Filebeat / Metricbeat / OTel]
     D --> E[Logstash / APM Server]
@@ -117,8 +117,8 @@ Health checks validate:
 
 Implemented with `sast_automation.py`:
 
-1. Clone vulnerable apps (`vulpy`, `dvca`)
-2. Run scanners (`Bandit`, `Flawfinder`)
+1. Clone vulnerable apps (`vulpy`, `dvna`, `dvca`)
+2. Run scanners (`Bandit`, `NjsScan`, `Flawfinder`)
 3. Handle SARIF-compatible outputs
 4. Import to DefectDojo (`/api/v2/import-scan/`)
 5. Apply tags:
@@ -180,7 +180,6 @@ Configured rules:
 Automated flow:
 
 - scan -> import to DefectDojo -> tagging -> evidence -> PDF report
-- final report generation based on available SARIF inputs in the environment
 
 Generated artifacts:
 
@@ -214,7 +213,7 @@ Required datasets were present:
 
 ### 3) Vulnerability Workflow
 
-SAST findings from `vulpy` and `dvca` were imported to DefectDojo with tags and deduplication-ready behavior across repeated runs.
+SAST findings were imported to DefectDojo with tags and deduplication-ready behavior across repeated runs.
 
 ### 4) Observability and Detection
 
