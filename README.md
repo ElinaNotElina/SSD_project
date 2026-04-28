@@ -1,300 +1,332 @@
 # SSD Project: Observability + Vulnerability Management
 
-This repository deploys two main components of the system:
+This repository contains a Secure System Development course project that integrates:
 
-* `DefectDojo` for vulnerability management
-* `ELK` (`Elasticsearch + Logstash + Kibana`) for observability
+- Vulnerability management with DefectDojo
+- Observability with ELK (`Elasticsearch`, `Logstash`, `Kibana`)
+- Automated scan-to-report workflow
 
-Important: this top-level repository does not contain the compose configurations itself. They are included via git submodules:
-
-* [`defectdojo`](./defectdojo) → https://github.com/DefectDojo/django-DefectDojo
-* [`elk`](./elk) → https://github.com/deviantony/docker-elk
-
-Submodules are essential here: without them, `scripts/init.sh` and `scripts/up.sh` will not work. The top-level shell scripts only orchestrate the Docker Compose files located inside the submodules.
+The top-level repository orchestrates infrastructure from git submodules.
 
 ---
 
-## Quick Start
+## Introduction
 
-### 1. Clone the repository
+Security testing and runtime monitoring are often handled separately, which makes triage, investigation, and reporting harder.  
+This project combines both directions in one reproducible environment:
 
-Preferred way (with submodules):
+- static detection of vulnerabilities (SAST),
+- centralized vulnerability management (DefectDojo),
+- runtime telemetry collection (logs, metrics, traces),
+- visualization and alerting in Kibana,
+- automated IMRaD report generation.
+
+### Objectives
+
+- Deploy DefectDojo and ELK with cross-platform scripts.
+- Run SAST against multiple vulnerable applications.
+- Import findings to DefectDojo with tags and deduplication.
+- Ingest logs/metrics/traces and CISA KEV feed into Elasticsearch.
+- Build Kibana dashboards and alert rules.
+- Generate final report artifacts for defense/demo.
+
+---
+
+## Methods
+
+### System Architecture Diagram
+
+```mermaid
+flowchart LR
+    A[Apps: vulpy / dvna / dvca] --> B[SAST Tools]
+    B --> C[DefectDojo]
+    A --> D[Filebeat / Metricbeat / OTel]
+    D --> E[Logstash / APM Server]
+    E --> F[Elasticsearch]
+    F --> G[Kibana]
+    C --> G
+```
+
+### Data Flow Diagram (SAST -> DefectDojo -> Report)
+
+```mermaid
+flowchart LR
+    A[Run SAST Scans] --> B[Generate SARIF]
+    B --> C[Import via DefectDojo API]
+    C --> D[Tagging + Deduplication]
+    D --> E[Collect Results and Metrics]
+    E --> F[Generate IMRaD PDF Report]
+```
+
+### Observability Pipeline Diagram
+
+```mermaid
+flowchart LR
+    A[Application / Containers] --> B[Collectors]
+    B --> C[Storage]
+    C --> D[Visualization and Alerts]
+
+    B --- B1[Filebeat / Metricbeat / OTel]
+    C --- C1[Elasticsearch]
+    D --- D1[Kibana Dashboards + Rules]
+```
+
+### 1) Repository and Submodules
+
+Compose definitions are provided via submodules:
+
+- `defectdojo` -> [DefectDojo/django-DefectDojo](https://github.com/DefectDojo/django-DefectDojo)
+- `elk` -> [AlliumPro/docker-elk](https://github.com/AlliumPro/docker-elk.git)
+
+Without submodules, startup scripts will not work.
+
+### 2) Components
+
+- **DefectDojo** for vulnerability management
+- **Elasticsearch** for indexing/storage
+- **Logstash** for pipeline processing
+- **Kibana** for query, dashboards, and rules
+- **Filebeat** for logs
+- **Metricbeat** for metrics
+- **APM Server** for OTLP traces
+- **OpenTelemetry trace generator** for demo traces
+- **CISA KEV feed ingestion** through Logstash `http_poller`
+
+### 3) Deployment and Reliability
+
+Cross-platform scripts:
+
+- Bash: `scripts/init.sh`, `scripts/up.sh`, `scripts/down.sh`, `scripts/verify_observability.sh`
+- PowerShell: `scripts/init.ps1`, `scripts/up.ps1`, `scripts/down.ps1`, `scripts/verify_observability.ps1`
+
+Startup includes:
+
+- ELK setup (users and roles),
+- ELK core services,
+- observability extensions (`filebeat`, `metricbeat`, `apm-server`),
+- DefectDojo build/startup,
+- Juice Shop demo container startup,
+- DefectDojo admin password extraction from initializer logs.
+
+Health checks validate:
+
+- required containers running,
+- required datasets available (`metricbeat-*`, `logs-observability-*`, `cisa-kev-*`, `traces-apm*`).
+
+### 4) SAST Automation and DefectDojo Integration
+
+Implemented with `sast_automation.py`:
+
+1. Clone vulnerable apps (`vulpy`, `dvna`, `dvca`)
+2. Run scanners (`Bandit`, `NjsScan`, `Flawfinder`)
+3. Handle SARIF-compatible outputs
+4. Import to DefectDojo (`/api/v2/import-scan/`)
+5. Apply tags:
+   - `tool:*`
+   - `project:*`
+   - `severity:*`
+   - `priority:*`
+   - `sast`, `automated`
+
+Deduplication requires enabling `Deduplication within this engagement only` in DefectDojo engagement settings.
+
+### 5) Observability Pipeline
+
+Implemented data flows:
+
+- Logs: `Filebeat -> Logstash -> Elasticsearch` -> `logs-observability-*`
+- Metrics: `Metricbeat -> Elasticsearch` -> `metricbeat-*`
+- Traces: `OpenTelemetry -> APM Server -> Elasticsearch` -> `traces-apm*`
+- External feed: `CISA KEV -> Logstash -> Elasticsearch` -> `cisa-kev-*`
+
+Trace demo command:
+
+```bash
+python3 scripts/generate_traces.py --count 60 --delay 0.2
+```
+
+### 6) Dashboards and Alerts
+
+Used Kibana Data Views:
+
+- `metricbeat-*`
+- `logs-observability-*`
+- `cisa-kev-*`
+- `traces-apm*`
+
+Used KQL examples:
+
+- `message : ("*error*" or "*exception*" or "*failed*")`
+- `message : ("*UNION SELECT*" or "*../*" or "*<script*" or "*sqlmap*" or "*or 1=1*")`
+- `container.name : *`
+- `span.name : ("pipeline.scan_to_report" or "stage.import_defectdojo")`
+
+Built dashboard:
+
+- `SSD Observability Dashboard`
+  - Container CPU Over Time
+  - Container RAM Over Time
+  - Error Logs Trend
+  - Suspicious Requests by Container
+  - CISA KEV Feed Activity
+
+Configured rules:
+
+- `SSD High CPU Container`
+- `SSD Suspicious Request`
+
+### 7) Scan-to-Report Pipeline
+
+Automated flow:
+
+- scan -> import to DefectDojo -> tagging -> evidence -> PDF report
+
+Generated artifacts:
+
+- `artifacts/scan_to_report_summary_<timestamp>.json`
+- `artifacts/SSD_IMRaD_Report_<timestamp>.pdf`
+
+PDF contains:
+
+- IMRaD sections
+- System architecture diagram
+- `SAST -> DefectDojo -> Report` data-flow diagram
+- `Application -> Collector -> Storage -> Visualization` diagram
+
+---
+
+## Results
+
+### 1) Deployment
+
+Stack initialization and startup completed successfully through scripts.  
+Core services (`elasticsearch`, `logstash`, `kibana`, `filebeat`, `metricbeat`, `apm-server`) were validated as running.
+
+### 2) Data Availability
+
+Required datasets were present:
+
+- `metricbeat-*`
+- `logs-observability-*`
+- `cisa-kev-*`
+- `traces-apm*`
+
+### 3) Vulnerability Workflow
+
+SAST findings were imported to DefectDojo with tags and deduplication-ready behavior across repeated runs.
+
+### 4) Observability and Detection
+
+Dashboard and KQL checks showed:
+
+- CPU/RAM trends,
+- app error visibility,
+- suspicious request detection,
+- trace visibility by pipeline stage,
+- KEV feed activity.
+
+Alert rules were enabled for:
+
+- high CPU condition,
+- suspicious request patterns.
+
+### 5) Reporting
+
+The end-to-end pipeline generated timestamped JSON/PDF artifacts with diagrams and evidence for final demo/defense.
+
+Generated report example: [SSD_IMRaD_Report_20260426_230051.pdf](https://disk.yandex.ru/i/q2NJyFUTC28_CQ).
+
+---
+
+## Discussion
+
+### Strengths
+
+- Unified security and observability workflow.
+- Centralized findings and cleaner triage through DefectDojo.
+- Practical ELK telemetry and rule-based alerting.
+- Reproducible setup on Linux/macOS and Windows.
+
+### Limitations
+
+- Suspicious-pattern queries can produce false positives if not tuned.
+- Severity analytics in Kibana require explicit sync design with DefectDojo.
+- Visual density depends on activity volume and selected time range.
+
+### Future Improvements
+
+- Add notification connectors (Slack/email/webhook).
+- Improve correlation between SAST findings and runtime anomalies.
+- Expand retention and lifecycle policies.
+- Instrument real application traces beyond synthetic generation.
+
+---
+
+## Team Contributions
+
+- **Adelina Karavaeva**: reproducible stack deployment, automation scripts, Juicy Shop deployment, and initial infrastructure documentation.
+- **Alena Starikova**: SAST automation and DefectDojo import/tagging/deduplication.
+- **Ivan Murzin**: observability architecture and implementation (logs/metrics/traces/KEV).
+- **Maria Rokkel**: Kibana Data Views, KQL validation, dashboard, and alert rules.
+- **Aliya Sagdieva**: automated scan-to-report workflow and IMRaD PDF generation.
+
+---
+
+## Practical Runbook
+
+### 1) Clone with submodules
+
+Preferred:
 
 ```bash
 git clone --recurse-submodules https://github.com/ElinaNotElina/SSD_project.git
 cd SSD_project
 ```
 
-If already cloned without submodules:
+If cloned without submodules:
 
 ```bash
 git submodule update --init --recursive
 ```
 
----
+### 2) One-time initialization
 
-### 2. One-time initialization
+Linux/macOS:
 
 ```bash
 bash scripts/init.sh
 ```
 
-PowerShell (Windows):
+Windows PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/init.ps1
 ```
 
-This script:
+### 3) Start system
 
-* initializes submodules
-* runs the `setup` container from `elk/docker-compose.yml`
-* creates/updates ELK system users
-
-This step is required at least once after a clean clone.
-
----
-
-### 3. Start the system
+Linux/macOS:
 
 ```bash
 bash scripts/up.sh
 ```
 
-PowerShell (Windows):
+Windows PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/up.ps1
 ```
 
-This script:
+### 4) Prepare DefectDojo context for SAST import
 
-* ensures ELK users/roles are initialized (`setup`)
-* starts the ELK stack
-* starts observability extensions (`Filebeat`, `Metricbeat`, `APM Server`)
-* builds and starts DefectDojo from the submodule
-* enables DefectDojo metrics endpoints (`nginx_status`, `django_metrics`)
-* prints the generated admin password from the `initializer` logs
+After stack startup:
 
----
+1. Open DefectDojo: `http://localhost:8080`
+2. Create Product (example: `SSD Project`)
+3. Create Engagement and enable deduplication
+4. Get DefectDojo API token
 
-### 4. Stop the system
-
-```bash
-bash scripts/down.sh
-```
-
-PowerShell (Windows):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/down.ps1
-```
-
----
-
-## Services
-
-* DefectDojo: http://localhost:8080
-* Kibana: http://localhost:5601
-* Juice Shop: http://localhost:3000
-* APM OTLP endpoint: http://localhost:8200/v1/traces
-
----
-
-## Default Credentials
-
-### ELK
-
-* Username: `elastic`
-* Password: `changeme`
-
----
-
-### DefectDojo
-
-* Username: `admin`
-* Password: generated at runtime
-
-To retrieve it manually:
-
-```bash
-docker compose -f defectdojo/docker-compose.yml logs initializer
-```
-
----
-
-## Notes
-
-* First startup may take several minutes (DefectDojo build)
-* `init.sh` is required only once
-* Logs are collected through `Filebeat -> Logstash -> Elasticsearch`
-* Metrics are collected through `Metricbeat`
-* Traces are collected through `OpenTelemetry -> APM Server`
-* Additional external feed integration: `CISA KEV -> Logstash -> Elasticsearch`
-
----
-
-## Point 3: Observability (Implemented)
-
-This repository now includes a full observability pipeline:
-
-1. **Metrics collection**
-   - `Metricbeat` extension is started automatically by `scripts/up.sh`
-   - Docker/container metrics and ELK component metrics are indexed in `metricbeat-*`
-
-2. **Log collection**
-   - `Filebeat` extension is started automatically by `scripts/up.sh`
-   - Filebeat output is routed to Logstash (`logstash:5044`)
-   - Logstash writes logs to `logs-observability-*`
-   - Log collection is scoped to `DefectDojo` containers and containers labeled with `ssd.observability=true`
-   - `Juice Shop` is started with this label automatically for demo purposes
-
-3. **Trace collection**
-   - `APM Server` is started automatically by `scripts/up.sh`
-   - A trace generator script is available: `scripts/generate_traces.py`
-
-4. **Integration of 2 systems**
-   - Docker logs pipeline (`Filebeat -> Logstash -> Elasticsearch`)
-   - CISA KEV feed pipeline (`Logstash http_poller -> Elasticsearch`), indexed as `cisa-kev-*`
-
-### Generate demo traces
-
-```bash
-python3 scripts/generate_traces.py --count 60 --delay 0.2
-```
-
-PowerShell (Windows):
-
-```powershell
-python scripts/generate_traces.py --count 60 --delay 0.2
-```
-
-### Verify observability health
-
-```bash
-bash scripts/verify_observability.sh
-```
-
-PowerShell (Windows):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/verify_observability.ps1
-```
-
-For any additional demo container that should be ingested into `logs-observability-*`, start it with:
-
-```bash
-docker run --label ssd.observability=true ...
-```
-
-In Kibana (`http://localhost:5601`), create data views for:
-
-* `metricbeat-*`
-* `logs-observability-*`
-* `cisa-kev-*`
-* `traces-apm*`
-
-Then use Discover / Dashboard / APM to visualize metrics, logs, traces, and KEV entries.
-
----
-
-## SAST Automation (Vulnerability Scanning)
-
-After the system is up and running, follow these steps to run automated SAST scans and import results into DefectDojo.
-
-### 1. Create Product and Engagement in DefectDojo
-
-1. Open DefectDojo at http://localhost:8080 and log in as `admin`
-2. Go to **Products** → **Add Product**
-   - Name: `SSD Project`
-   - Description: `Security testing project for SAST vulnerability scanning and management`
-   - Product Type: `Research and Development`
-3. Navigate to the product page → **Engagements** → **Add New Interactive Engagement**
-   - Name: `SSD Project`
-   - Description: `Automated SAST scanning engagement for vulnerability detection and tracking`
-   - **Click** `Deduplication within this engagement only` (this prevents duplicate findings on subsequent scans)
-
-> **Note:** Remember the Product ID and Engagement ID from the URL bar (e.g., `/product/5` → ID = 5, `/engagement/5` → ID = 5)
-
-### 2. Get DefectDojo API Token
-
-Navigate to Home/API Key section API v2 Key and get your Api Key.
-
-### 3. Run the SAST Automation Script
-
-```bash
-# Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Make script executable
-chmod +x sast_automation.py
-
-# Run the script
-python3 sast_automation.py
-```
-
-The script will prompt you to enter:
-- Product ID
-- Engagement ID
-- API Token
-
-### 4. What the Script Does
-
-The script automatically:
-1. Clones three vulnerable-by-design projects (`vulpy`, `dvna`, `dvca`)
-2. Runs SAST scanners (`Bandit`, `NjsScan`, `Flawfinder`) on each project
-3. Converts scan results to SARIF format
-4. Imports findings into DefectDojo via REST API
-5. Adds the following tags to each finding:
-   - `tool:bandit` / `tool:njsscan` / `tool:flawfinder`
-   - `project:vulpy` / `project:dvna` / `project:dvca`
-   - `severity:high` / `severity:medium` / `severity:info`
-   - `priority:high` / `priority:medium` / `priority:low`
-   - `sast`, `automated`
-
-### 5. Verify Results
-
-1. Open DefectDojo in your browser
-2. Navigate to your product
-3. You can see that findings are imported with all expected tags
-
----
-
-## Notes
-
-* Deduplication must be enabled at the Engagement level (check the box when creating the Engagement)
-
----
-
-## Point 5: Pipeline "Scan -> DefectDojo -> PDF Report" (Implemented)
-
-This step automates the full flow required for part 5:
-
-1. run SAST scans (Bandit, NjsScan, Flawfinder)
-2. import SARIF into DefectDojo (with dedup metadata)
-3. apply tags to findings
-4. fetch observability counters from Elasticsearch
-5. generate an IMRaD PDF report with required diagrams
-
-### What to do first
-
-If the stack is not running yet, start it first:
-
-```bash
-bash scripts/up.sh
-```
-
-PowerShell (Windows):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/up.ps1
-```
-
-### Run the end-to-end pipeline
+### 5) Run SAST and import findings into DefectDojo
 
 Linux/macOS:
 
@@ -302,7 +334,70 @@ Linux/macOS:
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+python3 sast_automation.py
+```
 
+Windows PowerShell:
+
+```powershell
+python -m venv venv
+venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python sast_automation.py
+```
+
+`sast_automation.py` asks for Product ID, Engagement ID, and API token.
+
+### 6) Generate traces
+
+Linux/macOS:
+
+```bash
+python3 scripts/generate_traces.py --count 60 --delay 0.2
+```
+
+Windows PowerShell:
+
+```powershell
+python scripts/generate_traces.py --count 60 --delay 0.2
+```
+
+### 7) Verify observability
+
+Linux/macOS:
+
+```bash
+bash scripts/verify_observability.sh
+```
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/verify_observability.ps1
+```
+
+### 8) Validate dashboards and alerts in Kibana
+
+Open Kibana: `http://localhost:5601`
+
+1. Confirm Data Views exist:
+   - `metricbeat-*`
+   - `logs-observability-*`
+   - `cisa-kev-*`
+   - `traces-apm*`
+2. Open dashboard `SSD Observability Dashboard` and verify widgets for CPU/RAM, error logs, suspicious requests, and KEV activity.
+3. In Discover, validate KQL examples:
+   - `message : ("*error*" or "*exception*" or "*failed*")`
+   - `message : ("*UNION SELECT*" or "*../*" or "*<script*" or "*sqlmap*" or "*or 1=1*")`
+4. In Rules, confirm alerts are enabled:
+   - `SSD High CPU Container`
+   - `SSD Suspicious Request`
+
+### 9) Generate final scan-to-report artifacts (before shutdown)
+
+Linux/macOS:
+
+```bash
 python3 scripts/scan_to_report.py \
   --product-id 5 \
   --engagement-id 5 \
@@ -312,37 +407,65 @@ python3 scripts/scan_to_report.py \
 Windows PowerShell:
 
 ```powershell
-python -m venv venv
-venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-
 powershell -ExecutionPolicy Bypass -File scripts/run_scan_to_report.ps1 `
   -ProductId 5 `
   -EngagementId 5 `
   -DojoToken <DEFECTDOJO_API_TOKEN>
 ```
 
-### Optional evidence screenshots for Results section
-
-Put screenshots (Discover, dashboard, alerts list, demo frames) into:
+Optional evidence screenshots folder:
 
 ```text
 artifacts/evidence/
 ```
 
-The report generator appends `*.png`, `*.jpg`, `*.jpeg`, `*.webp` files from this folder to the `Results` section.
+### 10) Stop system
 
-### Output artifacts
+Linux/macOS:
 
-The script generates:
+```bash
+bash scripts/down.sh
+```
 
-* `artifacts/scan_to_report_summary_<timestamp>.json`
-* `artifacts/SSD_IMRaD_Report_<timestamp>.pdf`
+Windows PowerShell:
 
-The PDF includes:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/down.ps1
+```
 
-* IMRaD structure (`Introduction`, `Methods`, `Results`, `Discussion`)
-* Architecture diagram
-* Data flow diagram (`SAST -> DefectDojo -> Report`)
-* Observability pipeline diagram (`Application -> Collector -> Storage -> Visualization`)
-* Findings severity chart and observability counters
+---
+
+## Services and Credentials
+
+- DefectDojo: `http://localhost:8080`
+- Kibana: `http://localhost:5601`
+- Juice Shop: `http://localhost:3000`
+- APM OTLP endpoint: `http://localhost:8200/v1/traces`
+
+ELK defaults:
+
+- Username: `elastic`
+- Password: `changeme`
+
+DefectDojo:
+
+- Username: `admin`
+- Password: generated at runtime
+
+Get DefectDojo admin password:
+
+```bash
+docker compose -f defectdojo/docker-compose.yml logs initializer
+```
+
+---
+
+## Notes
+
+- First startup may take several minutes (image pull/build).
+- `init` is required at least once after fresh clone.
+- For additional demo container ingestion into `logs-observability-*`:
+
+```bash
+docker run --label ssd.observability=true ...
+```
