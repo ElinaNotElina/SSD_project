@@ -264,7 +264,7 @@ Generated report example: [SSD_IMRaD_Report_20260426_230051.pdf](https://disk.ya
 
 ## Team Contributions
 
-- **Adelina Karavaeva**: reproducible stack deployment, automation scripts, Juicy Shop deployment, and initial infrastructure documentation.
+- **Adelina Karavaeva**: reproducible stack deployment, automation scripts, and initial infrastructure documentation.
 - **Alena Starikova**: SAST automation and DefectDojo import/tagging/deduplication.
 - **Ivan Murzin**: observability architecture and implementation (logs/metrics/traces/KEV).
 - **Maria Rokkel**: Kibana Data Views, KQL validation, dashboard, and alert rules.
@@ -439,7 +439,6 @@ powershell -ExecutionPolicy Bypass -File scripts/down.ps1
 
 - DefectDojo: `http://localhost:8080`
 - Kibana: `http://localhost:5601`
-- Juice Shop: `http://localhost:3000`
 - APM OTLP endpoint: `http://localhost:8200/v1/traces`
 
 ELK defaults:
